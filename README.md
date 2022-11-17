@@ -212,10 +212,91 @@ plt.show()
   모델의 결과를 확인해보면 shingling 이전의 모델에서 관측되었던 탑승자의 수가 가장 많은 시간대와 가장 적은 시간대를 이상치로 탐지하는 결과가 상당부분 해소된 것으로 확인됩니다. 8개의 event에 대한 TP 비율도 $129/536=0.241$정도로 이전에 비해 크게 향상된 것을 확인할 수 있습니다.
 
 ### 4.4. Anomaly detection using Isolation Forest with shingling (2)
+이전에 비해 이상치 탐지 성능이 상승했지만, 좀 더 성능을 끌어올리기 위해 기존 30분 간격으로 측정된 데이터를 1시간간격으로 smoothing한 후 이상치 탐지를 진행해보겠습니다.
+```python
+#Shingle
+n_shingling = 24
 
+y = np.zeros(shape=(len(df2)-n_shingling+1,n_shingling))
+for i in range(len(df2)-n_shingling+1):
+    x = []
+    for j in range(n_shingling):
+        x.append(df2.iloc[i+j].values[0])
+    y[i] = x
+
+df_h = pd.DataFrame(y,index=(df2.iloc[(n_shingling - 1):].index))
+#%%
+model = IsolationForest(n_estimators=100,
+                        contamination=df2['event'].sum()/len(df_h),
+                        random_state=0)
+
+model.fit(df_h)
+```
+```python
+scores = model.score_samples(df_h)
+scores = pd.Series(-scores, index=(df_h.index))
+fig, ax = plt.subplots(2, figsize=(70, 16))
+
+df_h['outliers'] = model.predict(df_h)
+
+a = df_h.loc[df_h['outliers'] == -1]
+
+ax[0].plot(df2.index, df2['value'], color='black', label='normal')
+ax[0].scatter(a.index, a[0], color='red', label='abnormal', s=500)
+
+for event, duration in events.items():
+    start, end = duration
+    ax[0].axvspan(start, end, alpha=0.3, color='springgreen')
+
+ax[1].plot(scores.index, scores)
+
+plt.legend()
+plt.show
+```
+<p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure10.png?raw=true"> 
+
+이전 30분 간격 데이터를 사용할때와 결과가 비슷한 것을 확인할 수 있다. 8개의 event에 대해 TP 비율을 확인하면 $62/272=0.228$로 소폭 감소한 것을 확인 할 수 있다. Event수에 대해서도 이전에는 6개의 event를 detect 했다면 이번 모델은 4개만 detect한 것을 알 수 있다. 
+
+### 4.5. (Additional) Anomaly detection using Robust Random Cut Forest
+마지막으로 Robust Random Cut Forest를 이용해 이상치 탐지를 진행하려고 한다. 논문에서 구현 된 코드를 토대로 진행하려고 했으나 API 안에 numpy 버전 충돌로 인해 직접 구현하지는 못하고, 논문 원문을 그대로 발췌해 소개하려고 합니다.
+```python
+# Set tree parameters
+num_trees = 200
+shingle_size = 48
+tree_size = 1000
+
+# Use the "shingle" generator to create rolling window
+points = rrcf.shingle(data, size=shingle_size)
+points = np.vstack([point for point in points])
+n = points.shape[0]
+sample_size_range = (n // tree_size, tree_size)
+
+forest = []
+while len(forest) < num_trees:
+    ixs = np.random.choice(n, size=sample_size_range,
+                           replace=False)
+    trees = [rrcf.RCTree(points[ix], index_labels=ix)
+             for ix in ixs]
+    forest.extend(trees)
+    
+avg_codisp = pd.Series(0.0, index=np.arange(n))
+index = np.zeros(n)
+
+for tree in forest:
+    codisp = pd.Series({leaf : tree.codisp(leaf)
+                        for leaf in tree.leaves})
+    avg_codisp[codisp.index] += codisp
+    np.add.at(index, codisp.index.values, 1)
+    
+avg_codisp /= index
+avg_codisp.index = taxi.iloc[(shingle_size - 1):].index
+```
+<p align="center"> <img src = "https://s3.us-east-2.amazonaws.com/mdbartos-img/rrcf/taxi.png">
+
+Robust Random Cut Forest와 Isolation Forest의 결과를 비교하자면 평균적인 이상치 점수가 Isolation Forest가 높고, 대신 이상치에서의 이상치 점수는 RRCF가 높은 것을 확인할 수 있다. Isolation Forest의 경우 위의 예시들로부터도 확인 할 수 있지만 어떤 지점이 이상치인지 명확하게 확인 할 수 없다는 단점이 있다.
 
 ## 5. Conclusion
-
+이번 튜토리얼을 통해 Isolation Forest를 이용한 시계열 데이터인 뉴욕시 택시 탑승객 데이터에 대한 이상치 탐지를 진행해보았다. 또한 이전의 밀도기반, 거리기반에서 벗어나 트리 기반의 Isolation Forest와 이를 시계열 데이터에 맞게 변형시킨 Robust Random Cut Forest 알고리즘에 대해 알아보는 시간을 가졌다. 이를 통해 기존의 다른 이상치 탐색 알고리즘을 적절히 변형한다면 시계열 데이터에 적합한 알고리즘을 만들어 낼 수 있다는 점을 확인했으며, RRCF를 이용해 다양한 분야에서 이상치 탐지를 적용 할 수 있을 것이다.
 
 ## 6. Reference
 1. Liu, Fei Tony, Kai Ming Ting, and Zhi-Hua Zhou. "Isolation forest." 2008 eighth ieee international conference on data mining. IEEE, 2008. [[Link]](https://ieeexplore.ieee.org/abstract/document/4781136)
