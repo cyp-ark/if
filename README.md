@@ -9,7 +9,7 @@
 
 ## 2. Isolation Forest
 Isolation Forest는 트리 기반의 이상치 탐지 모델입니다. 트리라 함은 의사결정나무와 같이 어떠한 변수에 대해 어떠한 기준점으로 양쪽으로 나누는 모델을 뜻합니다. Isolation Forest의 아이디어는 단순합니다. "이상치일수록 해당 데이터를 고립시키는데에 필요한 분기 수가 적고 정상값일 수록 고립에 필요한 분기 수가 많을 것이다"라고 표현 할 수 있습니다. 이 아이디어가 어떤 의미를 가지는지 다음 그림을 통해 확인해보도록 하겠습니다.
-
+   
 <p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure1.png?raw=true" width="40%" height="40%">
   
   위의 그림에서 정상값인 $x_{i}$를 고립시키는데 총 12번의 분기가 필요한 것을 확인할 수 있습니다. 반대로 이상치인 $x_{o}$의 경우 단 4번의 분기만으로 해당 값을 고립시킬 수 있습니다. 즉 앞선 설명처럼 이상치일수록 고립시키는데에 필요한 분기 수가 적은 것을 확인할 수 있습니다. 어떠한 데이터에 대해 이 값이 얼마나 이상치에 가까운지에 대한 이상치 점수는 다음의 식과 같이 표현 할 수 있습니다.
@@ -41,13 +41,15 @@ Robust Random Cut Forest에서는 Isolation Forest의 이상치 점수를 Collus
 Disp대신 CoDisp를 사용함으로써 $x$의 상위 노드까지 고려해 이상치 점수로 사용할 수 있습니다.
 ### 3.3. Shingling
 마지막으로 제안한 방법은 Shingling으로 주로 자연어 처리나 시계열 데이터 분석에 많이 사용하는 방법입니다. Shingling은 최근 $k$개의 값을 열벡터로 결합하여 feature 벡터로 사용하는 방법입니다. 예를 들어 $k=4$일 경우 첫번째 데이터는 $(t_{1},t_{2},t_{3},t_{4})^{T}$, 두번째 데이터는 $(t_{2},t_{3},t_{4},t_{5})^{T}$의 모양으로 변환되게 됩니다. Sliding window 같이 한 시점 단위로 shifting 되면서 vector를 구성하게 되고, 이는 시계열 데이터를 캡슐화 하여 noise에 강건하게 대응할 수 있습니다. 또한 이 값이 정상 범주에서 벗어날 경우 이상치로 탐색 할 수 있습니다.
+   
+
   
 <p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure5.png?raw=true" width="60%" height="60%"> 
 
 
 
 ## 4. NYC taxi data
-사용된 데이터셋은 unsupervised anomaly detection 분야에서 자주 사용되는 '뉴욕시 택시 탑승객 수'로 2014년 7월부터 2015년 1월까지 뉴욕시 택시 탑승객 수를 30분 단위로 측정한 데이터입니다. 원래는 unsupervised 데이터 셋이기 때문에 label이 없지만, rrcf 논문에서는 연휴나 기념일 등 8개의 이벤트를 anomaly로 간주하여 추가적인 비교를 할 수 있게 하였습니다. 먼저 기본적인 데이터 분석을 통해 해당 데이터셋의 형태에 대해 알아보겠습니다.
+본 튜토리얼에서는 Isolation Forest와 Robust Random Cut Forest를 이용한 시계열 데이터 이상치 탐지에 대해 알아보겠습니다. Isolation Forest의 경우 본래 시계열 데이터 이상치 탐지를 위해 개발된 알고리즘이 아니므로 다양한 시도를 수행하고 이를 Robust Random Cut Forest의 결과와 비교하고자 합니다. 사용된 데이터셋은 unsupervised anomaly detection 분야에서 자주 사용되는 '뉴욕시 택시 탑승객 수'로 2014년 7월부터 2015년 1월까지 뉴욕시 택시 탑승객 수를 30분 단위로 측정한 데이터입니다. 먼저 기본적인 데이터 분석을 통해 해당 데이터셋의 형태에 대해 알아보겠습니다.
 
 ### 4.1. Data description
 
@@ -60,7 +62,41 @@ import matplotlib.pyplot as plt
 df = pd.read_csv("taxi_rides.csv",index_col=0)
 df.index = pd.to_datetime(df.index)
 data = df['value'].astype(float).values
+
+plt.figure(figsize=(60,16))
+plt.plot(df['value'])
 ```
+<p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure2.png?raw=true"> 
+
+모든 기간에 대해 택시 탑승자 수의 변화를 살펴보자면 요일별로, 시간대 별로 패턴이 존재해 보인다. 데이터를 좀 더 정리해 요일별, 시간대 별 평균 탑승객 수를 알아보자.
+
+
+```python
+df['timestamp'] = pd.to_datetime(df['timestamp'])
+df['hour']=df.timestamp.dt.hour
+df['weekday']=pd.Categorical(df.timestamp.dt.strftime('%A'), 
+   categories=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday', 'Sunday'], ordered=True)
+
+plt.figure(figsize=(12,8))
+plt.plot(df[['value','weekday']].groupby('weekday').mean())
+```
+
+<p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure8.png?raw=true" width="40%" height="40%">
+
+요일별 평균 탑승객 수를 살펴보자면 월요일이 가장 탑승객 수가 적고, 점점 탑승객 수가 늘어나 토요일에 가장 많은 사람이 택시를 타고다니는 것을 알 수가 있다.
+
+```python
+plt.figure(figsize=(12,8))
+plt.plot(df[['value','hour']].groupby('hour').mean())
+plt.xticks(range(24))
+plt.show()
+```
+
+<p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure9.png?raw=true" width="40%" height="40%">
+
+시간대 별 평균 탑승객 수를 보자면 오전 5시에 가장 탑승객 수가 적고, 오후 6시에 가장 탑승객 수가 많은 것을 확인할 수 있다.
+   
+   본래 뉴욕시 택시 데이터는 unsupervised 데이터 셋이기 때문에 label이 없지만, Robust Random Cut Forest 논문에서는 연휴나 기념일 등 8개의 이벤트를 anomaly로 간주하여 추가적인 비교를 할 수 있게 하였습니다. 해당 기간을 다음과 같은 코드를 통해 labeling 할 수 있습니다.
 ```python
 # Create events
 events = {
@@ -86,11 +122,7 @@ for event, duration in events.items():
     start, end = duration
     df.loc[start:end, 'event'] = 1
 ```
-```python
-plt.figure(figsize=(60,16))
-plt.plot(df['value'])
-```
-<p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure2.png?raw=true"> 
+
 
 ### 4.2. Anomaly detection using Isolation Forest
 Scikit-learn의 IsolationForest 모듈을 이용해 이상치 탐색을 진행했습니다. Isolation Forest의 hyperparameter는 tree 개수 200개, 이상치 비율은 앞서 설정한 8개의 event의 비율만큼 설정해 모델을 실행합니다.
