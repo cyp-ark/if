@@ -296,7 +296,7 @@ avg_codisp.index = taxi.iloc[(shingle_size - 1):].index
 Robust Random Cut Forest와 Isolation Forest의 결과를 비교하자면 평균적인 이상치 점수가 Isolation Forest가 높고, 대신 이상치에서의 이상치 점수는 RRCF가 높은 것을 확인할 수 있다. Isolation Forest의 경우 위의 예시들로부터도 확인 할 수 있지만 어떤 지점이 이상치인지 명확하게 확인 할 수 없다는 단점이 있다.
 
 ## 5. Conclusion
-Isolation Forest를 이용한 시계열 데이터인 뉴욕시 택시 탑승객 데이터에 대한 이상치 탐지를 진행해보았다. 
+이번 튜토리얼을 통해 Isolation Forest를 이용한 시계열 데이터인 뉴욕시 택시 탑승객 데이터에 대한 이상치 탐지를 진행해보았다. 또한 이전의 밀도기반, 거리기반에서 벗어나 트리 기반의 Isolation Forest와 이를 시계열 데이터에 맞게 변형시킨 Robust Random Cut Forest 알고리즘에 대해 알아보는 시간을 가졌다. 이를 통해 기존의 다른 이상치 탐색 알고리즘을 적절히 변형한다면 시계열 데이터에 적합한 알고리즘을 만들어 낼 수 있다는 점을 확인했으며, RRCF를 이용해 다양한 분야에서 이상치 탐지를 적용 할 수 있을 것이다.
 
 ## 6. Reference
 1. Liu, Fei Tony, Kai Ming Ting, and Zhi-Hua Zhou. "Isolation forest." 2008 eighth ieee international conference on data mining. IEEE, 2008. [[Link]](https://ieeexplore.ieee.org/abstract/document/4781136)
