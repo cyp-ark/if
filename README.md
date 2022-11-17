@@ -1,4 +1,4 @@
-# Isolation Forest를 이용한 time series data에서의 anomaly detection
+# Isolation Forest를 이용한 시계열 데이터에서의 이상치 탐지
 이상치 탐지
 
 
@@ -17,9 +17,10 @@ Shingling은 최근 $k$개의 값을 열벡터로 결합하여 feature 벡터로
 <p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure5.png?raw=true" width="60%" height="60%"> 
 
 ## 4.
-사용된 데이터셋은 unsupervised anomaly detection 분야에서 자주 사용되는 '뉴욕시 택시 탑승객 수'로 2014년 7월부터 2015년 1월까지 뉴욕시 택시 탑승객 수를 30분 단위로 측정한 데이터입니다. 원래는 unsupervised 데이터 셋이기 때문에 label이 없지만, rrcf 논문에서는 연휴나 기념일 등 8개의 이벤트를 anomaly로 간주하여 추가적인 비교를 할 수 있게 하였습니다. 먼저 기본적인 Isolation Forest로 이상치 탐색을 수행하도록 하겠습니다.
+사용된 데이터셋은 unsupervised anomaly detection 분야에서 자주 사용되는 '뉴욕시 택시 탑승객 수'로 2014년 7월부터 2015년 1월까지 뉴욕시 택시 탑승객 수를 30분 단위로 측정한 데이터입니다. 원래는 unsupervised 데이터 셋이기 때문에 label이 없지만, rrcf 논문에서는 연휴나 기념일 등 8개의 이벤트를 anomaly로 간주하여 추가적인 비교를 할 수 있게 하였습니다. 먼저 기본적인 데이터 분석을 통해 해당 데이터셋의 형태에 대해 알아보겠습니다.
 
-### 4.1. Isolation Forest
+### 4.1. Data description
+
 
 ```python
 import pandas as pd
@@ -61,7 +62,7 @@ plt.plot(df['value'])
 ```
 <p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure2.png?raw=true"> 
 
-   
+### 4.2. Anomaly detection using Isolation Forest
 Scikit-learn의 IsolationForest 모듈을 이용해 이상치 탐색을 진행했습니다. Isolation Forest의 hyperparameter는 tree 개수 200개, 이상치 비율은 앞서 설정한 8개의 event의 비율만큼 설정해 모델을 실행합니다.
 
 ```python
@@ -99,9 +100,10 @@ plt.show()
 ```
 <p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure3.png?raw=true"> 
 
-   연한 초록색으로 되어있는 부분은 8개 event에 대한 기간을 나타낸 것입니다. 해당 기간의 값을 이상치로 탐지했는지, 그리고 다른 기간에서 어느 부분을 이상치로 판단했는지를 확인해보자면 우선 event가 있는 기간에 대한 판단을 맞춘 정도를 TP(True Positive) 비율로 계산하면 $38/536 = 0.071$정도로 매우 적은 비율로 이상치라고 탐지한 것을 확인할 수 있습니다. 해당 기간 이외에 다른 부분에서 어느 기간을 이상치로 탐지했는지 살펴보자면 주로 주변 기간대비 탑승자의 수가 가장 많은 피크시간대나 가장 적은 시간대를 이상치라고 탐지하는 것을 확인할 수 있습니다. 이러한 
+   연한 초록색으로 되어있는 부분은 8개 event에 대한 기간을 나타낸 것입니다. 해당 기간의 값을 이상치로 탐지했는지, 그리고 다른 기간에서 어느 부분을 이상치로 판단했는지를 확인해보자면 우선 event가 있는 기간에 대한 판단을 맞춘 정도를 TP(True Positive) 비율로 계산하면 $38/536 = 0.071$정도로 매우 적은 비율로 이상치라고 탐지한 것을 확인할 수 있습니다. 해당 기간 이외에 다른 부분에서 어느 기간을 이상치로 탐지했는지 살펴보자면 주로 주변 기간대비 탑승자의 수가 가장 많은 피크시간대나 탑승자가 가장 적은 시간대를 이상치라고 탐지하는 것을 확인할 수 있습니다. 이러한 급격한 값의 움직임에 좀 더 강건하게 대응하기 위해 데이터에 Shingling을 적용해 다시 Isolation Forest 모델을 사용하여봅시다.
 
-### 4.2. Shingling
+### 4.3. Anomaly detection using Isolation Forest with shingling
+하루동안 탑승자의 수가 가장 많은 시간대와 적은시간대를 이상치로 대부분 판단하였기 때문에 shingle의 $k=48$로 설정해 24시간동안의 탑승자의 수로 이상지 탐색을 진행하도록 하겠습니다. rrcf 패키지 안에 데이터를 shingle해주는 함수가 있지만 이번 튜토리얼에서는 for문을 통해 데이터를 shingle 해보도록 하겠습니다.
 ```python
 #Shingle
 n_shingling = 48
@@ -119,7 +121,6 @@ df_sh = pd.DataFrame(y,index=(df.iloc[(n_shingling - 1):].index))
 #%%
 model = IsolationForest(n_estimators=100,
                         contamination=df['event'].sum()/len(df),
-                        #contamination=0.004,
                         random_state=0)
 model.fit(df_sh)
 
