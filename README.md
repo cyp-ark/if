@@ -255,16 +255,48 @@ plt.show
 ```
 <p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure10.png?raw=true"> 
 
-이전 30분 간격 데이터를 사용할때와 결과가 비슷한 것을 확인할 수 있다. 8개의 event에 대해 TP 비율을 확인하면 $62/272=0.228$로 소폭 감소한 것을 확인 할 수 있다. 
+이전 30분 간격 데이터를 사용할때와 결과가 비슷한 것을 확인할 수 있다. 8개의 event에 대해 TP 비율을 확인하면 $62/272=0.228$로 소폭 감소한 것을 확인 할 수 있다. Event수에 대해서도 이전에는 6개의 event를 detect 했다면 이번 모델은 4개만 detect한 것을 알 수 있다. 
 
-### 4.4. Anomaly detection using Isolation Forest with shingling (3)
+### 4.5. (Additional) Anomaly detection using Robust Random Cut Forest
+마지막으로 Robust Random Cut Forest를 이용해 이상치 탐지를 진행하려고 한다. 논문에서 구현 된 코드를 토대로 진행하려고 했으나 API 안에 numpy 버전 충돌로 인해 직접 구현하지는 못하고, 논문 원문을 그대로 발췌해 소개하려고 합니다.
+```python
+# Set tree parameters
+num_trees = 200
+shingle_size = 48
+tree_size = 1000
 
+# Use the "shingle" generator to create rolling window
+points = rrcf.shingle(data, size=shingle_size)
+points = np.vstack([point for point in points])
+n = points.shape[0]
+sample_size_range = (n // tree_size, tree_size)
 
-### 4.5. Anomaly detection using Robust Random Cut Forest
+forest = []
+while len(forest) < num_trees:
+    ixs = np.random.choice(n, size=sample_size_range,
+                           replace=False)
+    trees = [rrcf.RCTree(points[ix], index_labels=ix)
+             for ix in ixs]
+    forest.extend(trees)
+    
+avg_codisp = pd.Series(0.0, index=np.arange(n))
+index = np.zeros(n)
 
+for tree in forest:
+    codisp = pd.Series({leaf : tree.codisp(leaf)
+                        for leaf in tree.leaves})
+    avg_codisp[codisp.index] += codisp
+    np.add.at(index, codisp.index.values, 1)
+    
+avg_codisp /= index
+avg_codisp.index = taxi.iloc[(shingle_size - 1):].index
+```
+<p align="center"> <img src = "https://s3.us-east-2.amazonaws.com/mdbartos-img/rrcf/taxi.png">
+
+Robust Random Cut Forest와 Isolation Forest의 결과를 비교하자면 평균적인 이상치 점수가 Isolation Forest가 높고, 대신 이상치에서의 이상치 점수는 RRCF가 높은 것을 확인할 수 있다. Isolation Forest의 경우 위의 예시들로부터도 확인 할 수 있지만 어떤 지점이 이상치인지 명확하게 확인 할 수 없다는 단점이 있다.
 
 ## 5. Conclusion
-
+Isolation Forest를 이용한 시계열 데이터인 뉴욕시 택시 탑승객 데이터에 대한 이상치 탐지를 진행해보았다. 
 
 ## 6. Reference
 1. Liu, Fei Tony, Kai Ming Ting, and Zhi-Hua Zhou. "Isolation forest." 2008 eighth ieee international conference on data mining. IEEE, 2008. [[Link]](https://ieeexplore.ieee.org/abstract/document/4781136)
