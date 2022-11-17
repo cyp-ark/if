@@ -22,14 +22,29 @@ $$s(x,n) = 2^{-\frac{E(h(x))}{c(n)}}$$
 
 이를 통해 기존의 알고리즘들이 가지고 있던 문제를 해결할 뿐만 아니라 앙상블 기법을 통한 모델의 강건성도 확보 할 수 있습니다.
 ## 3. Robust Random Cut Forest
-Robust Random Cut Forest는 Isolation Forest를 실시간 스트리밍 환경에 맞춰 변형시킨 모델입니다. 기존 Isolation Forest와 다른점은 우선 분기를 위해 랜덤하게 feature를 선택하는 과정에서 Isolation Forest는 모든 feature가 모두 같은 확률을 가진다면, Robust Random Cut Forest에서의 feature $p$가 선택될 확률은 다음과 같이 표현됩니다.
+Robust Random Cut Forest는 Isolation Forest를 실시간 스트리밍 환경에 맞춰 변형시킨 모델입니다. 기존 Isolation Forest와 다른점은 우선 분기를 위해 랜덤하게 feature를 선택하는 과정에서 Isolation Forest는 모든 feature가 모두 같은 확률을 가진다면, Robust Random Cut Forest에서 데이터셋 $S$에 대해 i번째 feature $p_{i}$가 선택될 확률은 다음과 같이 표현됩니다.
 
-  $$P(p_{i})=\frac{l_{i}}{\sum_{j}l_{j}},l_{i}=max_{x \in S}x_{i}-min_{x \in S}x_{i}$$
+  $$P(p_{i})=\frac{l_{i}}{\sum_{j}l_{j}}, l_{i}=max_{x \in S}x_{i}-min_{x \in S}x_{i}$$
+즉 feature $p$의 range가 클 수록 트리를 만드는데에 있어 해당 feature가 선택될 확률이 늘어난다는 것 입니다. 이로 인해 시간에 따라 변동성이 큰 데이터에 잘 대응하여 트리를 만들 수 있고, 따라서 RRCF가 실시간 스트리밍 데이터에 적합한 알고리즘이라고 해당 논문의 저자들은 주장합니다. 이 외에도 저자들은 Isolation Forest에서 세가지 정도를 추가적으로 제안합니다. 그 내용은 아래와 같습니다.
+   
+### 3.1. 실시간 스트리밍 데이터
+현재 시점 $t$에서 tree를 만드는데 256개의 sample을 사용한다고 하면 데이터셋 $S_{t}=\lbrace \mathbf{x_{t-255}}, \mathbf{x_{t-254}},\ldots,\mathbf{x_{t}}\rbrace$을 사용하여 트리 $\mathcal{T(S_{t})}$를 만들수 있을 것 입니다. 이 때 $t+1$시점의 데이터가 들어오게 된다면 일반적인 Isolation Forest 모델은 데이터셋 $S_{t+1}=\lbrace \mathbf{x_{t-254}}, \mathbf{x_{t-253}},\ldots,\mathbf{x_{t+1}}\rbrace$을 이용해 새로운 트리 $\mathcal{T(S_{t+1})}$을 만들어야할 것입니다. 그러나 저자들은 기존의 트리 $\mathcal{T(S_{t})}$에서 $\mathbf{x_{t+1}}$을 추가 한 후 $\mathbf{x_{t-255}}$를 삭제해서 만든 새로운 트리 $\mathcal{T'(S_{t+1})}$를 사용하는 것을 제안합니다. 이를 통해 실시간 데이터가 들어와도 새롭게 트리를 만드는 것이 아닌 기존 트리를 활용할 수 있어 실시간 스트리밍 데이터에 적합한 알고리즘이라고 합니다.
+### 3.2. CoDisp
+Robust Random Cut Forest에서는 Isolation Forest의 이상치 점수를 Collusive Displacement(CoDisp)를 사용합니다. Codisp를 이해하기 위해서는 우선 Disp부터 알아야합니다.
 
-### 3.1.Shingling
-Shingling은 최근 $k$개의 값을 열벡터로 결합하여 feature 벡터로 사용하는 방법입니다. 예를 들어 $k=4$일 경우 첫번째 데이터는 $(t_{1},t_{2},t_{3},t_{4})^{T}$, 두번째 데이터는 $(t_{2},t_{3},t_{4},t_{5})^{T}$의 모양으로 변환되게 됩니다. Sliding window 같이 한 시점 단위로 shifting 되면서 vector를 구성하게 되고, 이는 시계열 데이터를 캡슐화 하여 noise에 강건하게 대응할 수 있습니다. 또한 이 값이 정상 범주에서 벗어날 경우 이상치로 탐색 할 수 있습니다.
+<p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure7.png?raw=true" width="40%" height="40%">
+
+위 그림의 트리에서 데이터 $x$가 만약 삭제가 된다면 어떻게 될까요? $x$의 자매노드인 $C$의 데이터들은 depth가 1씩 줄어들 것 입니다. 이렇게 데이터 $x$가 삭제될때 데이터셋 S로 만든 트리에서의 depth 변화를 $Disp(x,S)$라고 정의합니다. Isolation Forest에서도 이상치일 수록 해당 데이터를 고립시키는데에 적은 분기가 사용되기 때문에 depth가 작을 것이고 이상치 데이터일수록 그 데이터가 삭제가 된다면 $Disp(x,S)$값은 커지게 될것입니다.
+   
+   RRCF의 저자들은 Disp에서 한단계 더 나아가 데이터 $x$를 포함하는 모든 부분집합 $C$에 대해 Disp를 계산하고 이것을 그 집합의 크기인 $|C|$로 나눈 CoDisp를 제안합니다. 수식으로 나타내면 다음과 같습니다.
+   $$CoDisp(C,S)=\mathbb{E_{T}}[max_{x \in C \subset S}\frac{Disp(C,S)}{|C|}]$$
+Disp대신 CoDisp를 사용함으로써 $x$의 상위 노드까지 고려해 이상치 점수로 사용할 수 있습니다.
+### 3.3. Shingling
+마지막으로 제안한 방법은 Shingling으로 주로 자연어 처리나 시계열 데이터 분석에 많이 사용하는 방법입니다. Shingling은 최근 $k$개의 값을 열벡터로 결합하여 feature 벡터로 사용하는 방법입니다. 예를 들어 $k=4$일 경우 첫번째 데이터는 $(t_{1},t_{2},t_{3},t_{4})^{T}$, 두번째 데이터는 $(t_{2},t_{3},t_{4},t_{5})^{T}$의 모양으로 변환되게 됩니다. Sliding window 같이 한 시점 단위로 shifting 되면서 vector를 구성하게 되고, 이는 시계열 데이터를 캡슐화 하여 noise에 강건하게 대응할 수 있습니다. 또한 이 값이 정상 범주에서 벗어날 경우 이상치로 탐색 할 수 있습니다.
   
 <p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure5.png?raw=true" width="60%" height="60%"> 
+
+
 
 ## 4. NYC taxi data
 사용된 데이터셋은 unsupervised anomaly detection 분야에서 자주 사용되는 '뉴욕시 택시 탑승객 수'로 2014년 7월부터 2015년 1월까지 뉴욕시 택시 탑승객 수를 30분 단위로 측정한 데이터입니다. 원래는 unsupervised 데이터 셋이기 때문에 label이 없지만, rrcf 논문에서는 연휴나 기념일 등 8개의 이벤트를 anomaly로 간주하여 추가적인 비교를 할 수 있게 하였습니다. 먼저 기본적인 데이터 분석을 통해 해당 데이터셋의 형태에 대해 알아보겠습니다.
