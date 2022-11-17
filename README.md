@@ -49,7 +49,7 @@ Disp대신 CoDisp를 사용함으로써 $x$의 상위 노드까지 고려해 이
 
 
 ## 4. NYC taxi data
-본 튜토리얼에서는 Isolation Forest와 Robust Random Cut Forest를 이용한 시계열 데이터 이상치 탐지에 대해 알아보겠습니다. Isolation Forest의 경우 본래 시계열 데이터 이상치 탐지를 위해 개발된 알고리즘이 아니므로 다양한 시도를 수행하고 이를 Robust Random Cut Forest의 결과와 비교하고자 합니다. 사용된 데이터셋은 unsupervised anomaly detection 분야에서 자주 사용되는 '뉴욕시 택시 탑승객 수'로 2014년 7월부터 2015년 1월까지 뉴욕시 택시 탑승객 수를 30분 단위로 측정한 데이터입니다. 원래는 unsupervised 데이터 셋이기 때문에 label이 없지만, rrcf 논문에서는 연휴나 기념일 등 8개의 이벤트를 anomaly로 간주하여 추가적인 비교를 할 수 있게 하였습니다. 먼저 기본적인 데이터 분석을 통해 해당 데이터셋의 형태에 대해 알아보겠습니다.
+본 튜토리얼에서는 Isolation Forest와 Robust Random Cut Forest를 이용한 시계열 데이터 이상치 탐지에 대해 알아보겠습니다. Isolation Forest의 경우 본래 시계열 데이터 이상치 탐지를 위해 개발된 알고리즘이 아니므로 다양한 시도를 수행하고 이를 Robust Random Cut Forest의 결과와 비교하고자 합니다. 사용된 데이터셋은 unsupervised anomaly detection 분야에서 자주 사용되는 '뉴욕시 택시 탑승객 수'로 2014년 7월부터 2015년 1월까지 뉴욕시 택시 탑승객 수를 30분 단위로 측정한 데이터입니다. 먼저 기본적인 데이터 분석을 통해 해당 데이터셋의 형태에 대해 알아보겠습니다.
 
 ### 4.1. Data description
 
@@ -93,6 +93,35 @@ plt.show()
 ```
 
 <p align="center"> <img src="https://github.com/cyp-ark/if/blob/main/figure/figure9.png?raw=true" width="40%" height="40%">
+
+시간대 별 평균 탑승객 수를 보자면 오전 5시에 가장 탑승객 수가 적고, 오후 6시에 가장 탑승객 수가 많은 것을 확인할 수 있다.
+   
+   본래 뉴욕시 택시 데이터는 unsupervised 데이터 셋이기 때문에 label이 없지만, Robust Random Cut Forest 논문에서는 연휴나 기념일 등 8개의 이벤트를 anomaly로 간주하여 추가적인 비교를 할 수 있게 하였습니다. 해당 기간을 다음과 같은 코드를 통해 labeling 할 수 있습니다.
+```python
+# Create events
+events = {
+'independence_day' : ('2014-07-04 00:00:00',
+                      '2014-07-07 00:00:00'),
+'labor_day'        : ('2014-09-01 00:00:00',
+                      '2014-09-02 00:00:00'),
+'labor_day_parade' : ('2014-09-06 00:00:00',
+                      '2014-09-07 00:00:00'),
+'nyc_marathon'     : ('2014-11-02 00:00:00',
+                      '2014-11-03 00:00:00'),
+'thanksgiving'     : ('2014-11-27 00:00:00',
+                      '2014-11-28 00:00:00'),
+'christmas'        : ('2014-12-25 00:00:00',
+                      '2014-12-26 00:00:00'),
+'new_year'         : ('2015-01-01 00:00:00',
+                      '2015-01-02 00:00:00'),
+'blizzard'         : ('2015-01-26 00:00:00',
+                      '2015-01-28 00:00:00')
+}
+df['event'] = np.zeros(len(df))
+for event, duration in events.items():
+    start, end = duration
+    df.loc[start:end, 'event'] = 1
+```
 
 
 ### 4.2. Anomaly detection using Isolation Forest
